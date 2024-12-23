@@ -27,8 +27,8 @@ impl Shell {
         }
     }
 
-    fn execute(&self, args: &Vec<String>) -> i32 {
-        assert!(args.len() > 0);
+    fn execute(&self, args: &[String]) -> i32 {
+        assert!(!args.is_empty());
         let command: &str = args.first().unwrap().as_str();
         match command {
             "exit" => ExitCommand::execute(args),

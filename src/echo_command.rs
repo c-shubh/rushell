@@ -1,10 +1,12 @@
 pub struct EchoCommand;
 impl EchoCommand {
-    pub fn execute(args: &Vec<String>) -> i32 {
-        for i in 1..(args.len() - 1) {
-            print!("{} ", args[i]);
+    pub fn execute(args: &[String]) -> i32 {
+        for arg in args.iter().take(args.len() - 1).skip(1) {
+            print!("{} ", arg);
         }
-        println!("{}", args[args.len() - 1]);
+        if args.len() > 1 {
+            println!("{}", args[args.len() - 1]);
+        }
         0
     }
 }

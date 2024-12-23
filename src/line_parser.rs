@@ -14,6 +14,6 @@ impl LineParser {
         if !current.is_empty() {
             ans.push(current);
         }
-        return ans;
+        ans
     }
 }
