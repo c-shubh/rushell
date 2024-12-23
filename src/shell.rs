@@ -1,13 +1,18 @@
-use crate::command::Command;
 use crate::echo_command::EchoCommand;
+use crate::type_command::TypeCommand;
 use crate::{exit_command::ExitCommand, line_parser::LineParser};
+use std::collections::HashSet;
 use std::io::{self, Write};
 
-pub struct Shell;
+pub struct Shell {
+    built_in_commands: HashSet<String>,
+}
 
 impl Shell {
     pub fn new() -> Shell {
-        Shell {}
+        Shell {
+            built_in_commands: HashSet::from(["exit", "echo", "type"].map(str::to_string)),
+        }
     }
 
     pub fn repl(&self) {
@@ -28,6 +33,7 @@ impl Shell {
         match command {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
+            "type" => TypeCommand::execute(args, &self.built_in_commands),
             _ => {
                 eprintln!("{command}: command not found");
                 127
