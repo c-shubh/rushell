@@ -4,6 +4,7 @@ use crate::{exit_command::ExitCommand, line_parser::LineParser};
 use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
+use std::process::Command;
 
 pub struct Shell {
     built_in_commands: HashSet<String>,
@@ -47,14 +48,45 @@ impl Shell {
     fn execute(&self, args: &[String]) -> i32 {
         assert!(!args.is_empty());
         let command: &str = args.first().unwrap().as_str();
-        match command {
+
+        if self.built_in_commands.contains(command) {
+            self.execute_built_in(command, args)
+        } else {
+            self.execute_external(command, args)
+        }
+    }
+
+    fn command_not_found(&self, command: &str) -> i32 {
+        eprintln!("{command}: command not found");
+        127
+    }
+
+    fn execute_built_in(&self, command: &str, args: &[String]) -> i32 {
+        return match command {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
             "type" => TypeCommand::execute(args, &self.built_in_commands, &self.env_path),
-            _ => {
-                eprintln!("{command}: command not found");
-                127
-            }
+            _ => self.command_not_found(&command),
+        };
+    }
+
+    fn execute_external(&self, command: &str, args: &[String]) -> i32 {
+        let cmd = Command::new(command).args(&args[1..]).output();
+        if let Ok(output) = cmd {
+            io::stdout().write(&output.stdout).unwrap();
+            io::stdout().flush().unwrap();
+            io::stderr().write(&output.stderr).unwrap();
+            io::stderr().flush().unwrap();
+
+            return match output.status.code() {
+                Some(code) => code,
+                None => {
+                    // TODO: what do we return here?
+                    1
+                }
+            };
+        } else {
+            return self.command_not_found(command);
         }
     }
 
