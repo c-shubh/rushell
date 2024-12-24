@@ -1,19 +1,36 @@
 use crate::echo_command::EchoCommand;
+use crate::pwd_command::PwdCommand;
 use crate::type_command::TypeCommand;
 use crate::{exit_command::ExitCommand, line_parser::LineParser};
 use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::Command;
 
 pub struct Shell {
     built_in_commands: HashSet<String>,
     env_path: Vec<String>,
+    current_dir: PathBuf,
 }
 
 impl Shell {
     pub fn new() -> Shell {
-        let built_in_commands = HashSet::from(["exit", "echo", "type"].map(str::to_string));
+        Shell {
+            built_in_commands: Shell::get_built_in_commands(),
+            env_path: Shell::get_env_path(),
+            current_dir: Shell::get_current_dir(),
+        }
+    }
+
+    fn get_current_dir() -> PathBuf {
+        match env::current_dir() {
+            Ok(dir) => dir,
+            Err(_) => PathBuf::from("/"),
+        }
+    }
+
+    fn get_env_path() -> Vec<String> {
         let mut env_path: Vec<String> = Vec::new();
         if let Ok(path) = env::var("PATH") {
             let split_by: &str = match env::consts::OS {
@@ -23,10 +40,7 @@ impl Shell {
             path.split(split_by)
                 .for_each(|p| env_path.push(p.to_string()));
         }
-        Shell {
-            built_in_commands,
-            env_path,
-        }
+        env_path
     }
 
     pub fn run(&self) {
@@ -61,11 +75,16 @@ impl Shell {
         127
     }
 
+    fn get_built_in_commands() -> HashSet<String> {
+        HashSet::from(["exit", "echo", "type", "pwd"].map(str::to_string))
+    }
+
     fn execute_built_in(&self, command: &str, args: &[String]) -> i32 {
         return match command {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
             "type" => TypeCommand::execute(args, &self.built_in_commands, &self.env_path),
+            "pwd" => PwdCommand::execute(args, &self.current_dir),
             _ => self.command_not_found(&command),
         };
     }
