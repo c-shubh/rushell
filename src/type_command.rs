@@ -1,18 +1,39 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fs};
 
 pub struct TypeCommand;
 
 impl TypeCommand {
-    pub fn execute(args: &[String], built_in_commands: &HashSet<String>) -> i32 {
+    pub fn execute(
+        args: &[String],
+        built_in_commands: &HashSet<String>,
+        env_path: &[String],
+    ) -> i32 {
         let mut return_code: i32 = 0;
         for arg in args.iter().skip(1) {
             if built_in_commands.contains(arg) {
                 println!("{} is a shell builtin", arg);
+            } else if let Some(file_path) = TypeCommand::check_in_path(env_path, arg) {
+                println!("{} is {}", arg, file_path);
             } else {
                 println!("{}: not found", arg);
                 return_code = 1;
             }
         }
         return_code
+    }
+
+    fn check_in_path(env_path: &[String], command: &String) -> Option<String> {
+        for path in env_path {
+            for entry in fs::read_dir(path).unwrap() {
+                if let Ok(item) = entry {
+                    let item_path = item.path();
+                    let file_name = item_path.file_stem().unwrap().to_str().unwrap();
+                    if file_name == command {
+                        return Some(item_path.to_str().unwrap().to_string());
+                    }
+                }
+            }
+        }
+        None
     }
 }
