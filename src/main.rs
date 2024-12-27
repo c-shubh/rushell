@@ -5,6 +5,7 @@ mod line_parser;
 mod pwd_command;
 mod shell;
 mod type_command;
+mod utils;
 use shell::Shell;
 
 fn main() {

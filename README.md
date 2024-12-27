@@ -2,7 +2,7 @@
 
 Rushell is a toy shell that's capable of interpreting shell commands, running external programs and builtin commands like cd, pwd, echo and more. It implements shell command parsing, REPLs, builtin commands, and more.
 
-Currently, Rushell follows the [Build Your Own Shell](https://app.codecrafters.io/courses/shell/overview) guide as a roadmap for features.
+It is an exercise in learning Rust and follows the [Build Your Own Shell](https://app.codecrafters.io/courses/shell/overview) guide as a roadmap for features.
 
 ## Building Rushell
 
