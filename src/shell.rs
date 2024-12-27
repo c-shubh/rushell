@@ -24,9 +24,10 @@ impl Shell {
     fn get_env_path() -> Vec<String> {
         let mut env_path: Vec<String> = Vec::new();
         if let Ok(path) = env::var("PATH") {
-            let split_by: &str = match env::consts::OS {
+            let split_by: &str = match env::consts::FAMILY {
                 "windows" => ";",
-                _ => ":",
+                "unix" => ":",
+                _ => unimplemented!(),
             };
             path.split(split_by)
                 .for_each(|p| env_path.push(p.to_string()));

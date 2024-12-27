@@ -11,11 +11,11 @@ impl TypeCommand {
         let mut return_code: i32 = 0;
         for arg in args.iter().skip(1) {
             if built_in_commands.contains(arg) {
-                println!("{} is a shell builtin", arg);
+                eprintln!("{} is a shell builtin", arg);
             } else if let Some(file_path) = TypeCommand::check_in_path(env_path, arg) {
-                println!("{} is {}", arg, file_path);
+                eprintln!("{} is {}", arg, file_path);
             } else {
-                println!("{}: not found", arg);
+                eprintln!("{}: not found", arg);
                 return_code = 1;
             }
         }
