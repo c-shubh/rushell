@@ -6,13 +6,11 @@ use crate::{exit_command::ExitCommand, line_parser::LineParser};
 use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
-use std::path::PathBuf;
 use std::process::Command;
 
 pub struct Shell {
     built_in_commands: HashSet<String>,
     env_path: Vec<String>,
-    current_dir: PathBuf,
 }
 
 impl Shell {
@@ -20,14 +18,6 @@ impl Shell {
         Shell {
             built_in_commands: Shell::get_built_in_commands(),
             env_path: Shell::get_env_path(),
-            current_dir: Shell::get_current_dir(),
-        }
-    }
-
-    fn get_current_dir() -> PathBuf {
-        match env::current_dir() {
-            Ok(dir) => dir,
-            Err(_) => PathBuf::from("/"),
         }
     }
 
@@ -85,8 +75,8 @@ impl Shell {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
             "type" => TypeCommand::execute(args, &self.built_in_commands, &self.env_path),
-            "pwd" => PwdCommand::execute(args, &self.current_dir),
-            "cd" => CdCommand::execute(args, &mut self.current_dir),
+            "pwd" => PwdCommand::execute(args),
+            "cd" => CdCommand::execute(args),
             _ => self.command_not_found(command),
         }
     }

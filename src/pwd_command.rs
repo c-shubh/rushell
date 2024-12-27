@@ -1,10 +1,13 @@
-use std::path::Path;
+use std::env;
 
 pub struct PwdCommand;
 
 impl PwdCommand {
-    pub fn execute(_args: &[String], current_dir: &Path) -> i32 {
-        println!("{}", current_dir.display());
-        0
+    pub fn execute(_args: &[String]) -> i32 {
+        if let Ok(dir) = env::current_dir() {
+            println!("{}", dir.display());
+            return 0;
+        }
+        1
     }
 }

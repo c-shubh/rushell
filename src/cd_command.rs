@@ -6,7 +6,7 @@ use std::{
 pub struct CdCommand;
 
 impl CdCommand {
-    pub fn execute(args: &[String], current_dir: &mut PathBuf) -> i32 {
+    pub fn execute(args: &[String]) -> i32 {
         if args.len() == 1 {
             todo!("set current_dir to user's home dir here")
         }
@@ -21,8 +21,6 @@ impl CdCommand {
         if env::set_current_dir(&target).is_err() {
             return CdCommand::no_such_file_or_directory(target.to_path_buf());
         }
-        current_dir.clear();
-        current_dir.push(target);
         0
     }
 
