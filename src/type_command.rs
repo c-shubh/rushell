@@ -24,13 +24,11 @@ impl TypeCommand {
 
     fn check_in_path(env_path: &[String], command: &String) -> Option<String> {
         for path in env_path {
-            for entry in fs::read_dir(path).unwrap() {
-                if let Ok(item) = entry {
-                    let item_path = item.path();
-                    let file_name = item_path.file_stem().unwrap().to_str().unwrap();
-                    if file_name == command {
-                        return Some(item_path.to_str().unwrap().to_string());
-                    }
+            for item in fs::read_dir(path).unwrap().flatten() {
+                let item_path = item.path();
+                let file_name = item_path.file_stem().unwrap().to_str().unwrap();
+                if file_name == command {
+                    return Some(item_path.to_str().unwrap().to_string());
                 }
             }
         }

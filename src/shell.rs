@@ -1,3 +1,4 @@
+use crate::cd_command::CdCommand;
 use crate::echo_command::EchoCommand;
 use crate::pwd_command::PwdCommand;
 use crate::type_command::TypeCommand;
@@ -43,11 +44,11 @@ impl Shell {
         env_path
     }
 
-    pub fn run(&self) {
+    pub fn run(&mut self) {
         self.repl();
     }
 
-    fn repl(&self) {
+    fn repl(&mut self) {
         loop {
             self.print_prompt();
             let input = self.read_line();
@@ -59,7 +60,7 @@ impl Shell {
         }
     }
 
-    fn execute(&self, args: &[String]) -> i32 {
+    fn execute(&mut self, args: &[String]) -> i32 {
         assert!(!args.is_empty());
         let command: &str = args.first().unwrap().as_str();
 
@@ -76,36 +77,34 @@ impl Shell {
     }
 
     fn get_built_in_commands() -> HashSet<String> {
-        HashSet::from(["exit", "echo", "type", "pwd"].map(str::to_string))
+        HashSet::from(["exit", "echo", "type", "pwd", "cd"].map(str::to_string))
     }
 
-    fn execute_built_in(&self, command: &str, args: &[String]) -> i32 {
-        return match command {
+    fn execute_built_in(&mut self, command: &str, args: &[String]) -> i32 {
+        match command {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
             "type" => TypeCommand::execute(args, &self.built_in_commands, &self.env_path),
             "pwd" => PwdCommand::execute(args, &self.current_dir),
-            _ => self.command_not_found(&command),
-        };
+            "cd" => CdCommand::execute(args, &mut self.current_dir),
+            _ => self.command_not_found(command),
+        }
     }
 
     fn execute_external(&self, command: &str, args: &[String]) -> i32 {
         let cmd = Command::new(command).args(&args[1..]).output();
         if let Ok(output) = cmd {
-            io::stdout().write(&output.stdout).unwrap();
+            io::stdout().write_all(&output.stdout).unwrap();
             io::stdout().flush().unwrap();
-            io::stderr().write(&output.stderr).unwrap();
+            io::stderr().write_all(&output.stderr).unwrap();
             io::stderr().flush().unwrap();
 
-            return match output.status.code() {
-                Some(code) => code,
-                None => {
-                    // TODO: what do we return here?
-                    1
-                }
-            };
+            output.status.code().unwrap_or(
+                // TODO: what do we return when status code is None
+                1,
+            )
         } else {
-            return self.command_not_found(command);
+            self.command_not_found(command)
         }
     }
 
