@@ -1,7 +1,7 @@
 [package]
-name = "codecrafters-shell"
+name = "rushell"
 version = "0.1.0"
-authors = ["Codecrafters <hello@codecrafters.io>"]
+authors = ["Shubh A Chudasama <shubh.cs@proton.me>", "Codecrafters <hello@codecrafters.io>"]
 edition = "2021"
 rust-version = "1.80"
 

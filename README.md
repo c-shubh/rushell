@@ -1,35 +1,39 @@
-[![progress-banner](https://backend.codecrafters.io/progress/shell/2809a9e1-87fd-4592-8111-22a3ea6849de)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# Rushell
 
-This is a starting point for Rust solutions to the
-["Build Your Own Shell" Challenge](https://app.codecrafters.io/courses/shell/overview).
+Rushell is a toy shell that's capable of interpreting shell commands, running external programs and builtin commands like cd, pwd, echo and more. It implements shell command parsing, REPLs, builtin commands, and more.
 
-In this challenge, you'll build your own POSIX compliant shell that's capable of
-interpreting shell commands, running external programs and builtin commands like
-cd, pwd, echo and more. Along the way, you'll learn about shell command parsing,
-REPLs, builtin commands, and more.
+Currently, Rushell follows the [Build Your Own Shell](https://app.codecrafters.io/courses/shell/overview) guide as a roadmap for features.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+## Building Rushell
 
-# Passing the first stage
+1. Clone the repository
 
-The entry point for your `shell` implementation is in `src/main.rs`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+   ```bash
+   git clone https://github.com/c-shubh/rushell.git
+   cd rushell
+   ```
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
-```
+2. Build the project
 
-Time to move on to the next stage!
+   ```bash
+   cargo build
+   ```
 
-# Stage 2 & beyond
+3. Run Rushell
 
-Note: This section is for stages 2 and beyond.
+   ```bash
+   cargo run
+   ```
 
-1. Ensure you have `cargo (1.82)` installed locally
-1. Run `./your_program.sh` to run your program, which is implemented in
-   `src/main.rs`. This command compiles your Rust project, so it might be slow
-   the first time you run it. Subsequent runs will be fast.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+## Usage
+
+Once launched, Rushell acts as an interactive shell where you can:
+
+- Run commands like `ls`, `cat`, etc., if they are available in your system's PATH.
+- Use builtin commands such as `cd`, `pwd`, and `echo`.
+
+Although Rushell is developed on Windows 11, it strives to be cross-platform and takes care to ensure compatibility with other major operating systems.
+
+## License
+
+This project is licensed under the AGPLv3. See the [LICENSE](./LICENSE.md) file for details.
