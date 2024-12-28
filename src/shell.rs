@@ -1,8 +1,10 @@
 use crate::cd_command::CdCommand;
 use crate::echo_command::EchoCommand;
+use crate::exit_command::ExitCommand;
 use crate::pwd_command::PwdCommand;
+use crate::scanner::Scanner;
+use crate::token::TokenType;
 use crate::type_command::TypeCommand;
-use crate::{exit_command::ExitCommand, line_parser::LineParser};
 use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
@@ -43,7 +45,13 @@ impl Shell {
         loop {
             self.print_prompt();
             let input = self.read_line();
-            let args = LineParser::parse(input);
+            let mut scanner = Scanner::new(input);
+            let args: Vec<String> = scanner
+                .scan_tokens()
+                .iter()
+                .filter(|token| token.type_ != TokenType::Eof)
+                .map(|token| token.lexeme.clone())
+                .collect();
             if args.is_empty() {
                 continue;
             }
