@@ -10,18 +10,19 @@ pub struct CdCommand;
 impl CdCommand {
     pub fn execute(args: &[String]) -> i32 {
         // initially target is args[1] or home dir
-        let mut target: PathBuf = Path::new({
+        let initial: String = {
             if args.len() == 1 {
                 "~"
             } else {
                 &args[1]
             }
-        })
-        .to_path_buf();
+        }
+        .to_string();
         // try to expand tilde (home dir)
+        let mut target: PathBuf = Path::new(&initial).to_path_buf();
         if let Some(home_dir) = utils::home_dir() {
             target = Path::new(
-                &args[1].to_string().replace(
+                &initial.replace(
                     "~",
                     home_dir
                         .to_str()
