@@ -6,60 +6,55 @@ use crate::scanner::Scanner;
 use crate::token::TokenType;
 use crate::type_command::TypeCommand;
 use std::collections::HashSet;
-use std::env;
-use std::io::{self, Write};
+use std::io::{stderr, stdin, stdout, BufRead, BufReader, Write};
 use std::process::Command;
 
 pub struct Shell {
     built_in_commands: HashSet<String>,
-    env_path: Vec<String>,
 }
 
 impl Shell {
-    pub fn new() -> Shell {
+    pub fn new() -> Self {
         Shell {
             built_in_commands: Shell::get_built_in_commands(),
-            env_path: Shell::get_env_path(),
         }
     }
 
-    fn get_env_path() -> Vec<String> {
-        let mut env_path: Vec<String> = Vec::new();
-        if let Ok(path) = env::var("PATH") {
-            let split_by: &str = match env::consts::FAMILY {
-                "windows" => ";",
-                "unix" => ":",
-                _ => unimplemented!(),
-            };
-            path.split(split_by)
-                .for_each(|p| env_path.push(p.to_string()));
-        }
-        env_path
+    pub fn main(&self) {
+        self.run_prompt();
     }
 
-    pub fn run(&mut self) {
-        self.repl();
-    }
+    fn run_prompt(&self) {
+        let input = stdin().lock();
+        let mut reader = BufReader::new(input);
 
-    fn repl(&mut self) {
         loop {
-            self.print_prompt();
-            let input = self.read_line();
-            let mut scanner = Scanner::new(input);
-            let args: Vec<String> = scanner
-                .scan_tokens()
-                .iter()
-                .filter(|token| token.type_ != TokenType::Eof)
-                .map(|token| token.lexeme.clone())
-                .collect();
-            if args.is_empty() {
-                continue;
+            print!("$ ");
+            stdout().flush().unwrap();
+            let mut line: String = String::new();
+            if reader.read_line(&mut line).is_err() {
+                break;
             }
-            self.execute(&args);
+            line = line.trim().to_string();
+            self.run(line);
         }
     }
 
-    fn execute(&mut self, args: &[String]) -> i32 {
+    fn run(&self, source: String) {
+        let mut scanner = Scanner::new(source);
+        let args: Vec<String> = scanner
+            .scan_tokens()
+            .iter()
+            .filter(|token| token.type_ != TokenType::Eof)
+            .map(|token| token.lexeme.clone())
+            .collect();
+        if args.is_empty() {
+            return;
+        }
+        self.execute(&args);
+    }
+
+    fn execute(&self, args: &[String]) -> i32 {
         assert!(!args.is_empty());
         let command: &str = args.first().unwrap().as_str();
 
@@ -79,11 +74,11 @@ impl Shell {
         HashSet::from(["exit", "echo", "type", "pwd", "cd"].map(str::to_string))
     }
 
-    fn execute_built_in(&mut self, command: &str, args: &[String]) -> i32 {
+    fn execute_built_in(&self, command: &str, args: &[String]) -> i32 {
         match command {
             "exit" => ExitCommand::execute(args),
             "echo" => EchoCommand::execute(args),
-            "type" => TypeCommand::execute(args, &self.built_in_commands, &self.env_path),
+            "type" => TypeCommand::execute(args, &self.built_in_commands),
             "pwd" => PwdCommand::execute(args),
             "cd" => CdCommand::execute(args),
             _ => self.command_not_found(command),
@@ -93,10 +88,10 @@ impl Shell {
     fn execute_external(&self, command: &str, args: &[String]) -> i32 {
         let cmd = Command::new(command).args(&args[1..]).output();
         if let Ok(output) = cmd {
-            io::stdout().write_all(&output.stdout).unwrap();
-            io::stdout().flush().unwrap();
-            io::stderr().write_all(&output.stderr).unwrap();
-            io::stderr().flush().unwrap();
+            stdout().write_all(&output.stdout).unwrap();
+            stdout().flush().unwrap();
+            stderr().write_all(&output.stderr).unwrap();
+            stderr().flush().unwrap();
 
             output.status.code().unwrap_or(
                 // TODO: what do we return when status code is None
@@ -105,17 +100,5 @@ impl Shell {
         } else {
             self.command_not_found(command)
         }
-    }
-
-    fn print_prompt(&self) {
-        print!("$ ");
-        io::stdout().flush().unwrap();
-    }
-
-    fn read_line(&self) -> String {
-        let stdin = io::stdin();
-        let mut input = String::new();
-        stdin.read_line(&mut input).unwrap();
-        input.trim().to_string()
     }
 }

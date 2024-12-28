@@ -10,6 +10,6 @@ mod utils;
 use shell::Shell;
 
 fn main() {
-    let mut shell = Shell::new();
-    shell.run();
+    let shell = Shell::new();
+    shell.main();
 }
