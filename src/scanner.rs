@@ -130,7 +130,22 @@ impl Scanner {
                 if self.is_metacharacter(self.peek()) {
                     value.push(self.advance());
                 } else {
-                    value.push('\\');
+                    match self.peek() {
+                        '$' | '`' | '\'' | '"' | '\\' => {
+                            // only print matching character, and not backslash
+                            value.push(self.advance());
+                        }
+                        'n' => {
+                            value.push('\n');
+                            self.advance(); // consume n
+                        }
+                        _ => {
+                            // Backslashes preceding characters without a special meaning are left unmodified.
+
+                            // unknown escape sequence, print \ literally
+                            value.push('\\');
+                        }
+                    }
                 }
             } else {
                 value.push(self.advance());
@@ -369,14 +384,21 @@ mod tests {
 
     #[test]
     fn test_backslash_in_unquoted_string() {
-        let input = "hello\\nworld";
+        let input = "echo \\'\\\"example shell\\\"\\' hello\\\\nworld ";
         let mut scanner = Scanner::new(input.to_string());
         let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
         let expected = [
+            Token::new(TokenType::String, "echo".to_string()),
+            Token::new(TokenType::String, "'\"example".to_string()),
+            Token::new(TokenType::String, "shell\"'".to_string()),
             Token::new(TokenType::String, "hello\\nworld".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
+
+        println!("actual: {:#?}", tokens);
+        println!("expected: {:#?}", expected);
+
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in expected.iter().zip(tokens) {
