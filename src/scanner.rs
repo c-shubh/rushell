@@ -31,24 +31,47 @@ impl Scanner {
         let c = self.advance();
         if c == ' ' || c == '\t' {
         } else if c == '\'' {
-            while self.peek() != '\'' && !self.is_at_end() {
-                self.advance();
-            }
-            if self.is_at_end() {
-                eprintln!("unexpected EOF while looking for matching `''");
-                return;
-            }
-            let value = self.source[(self.start + 1)..self.current].to_string();
-            self.advance();
-            self.tokens.push(Token::new(TokenType::String, value));
+            self.scan_single_quoted_string();
+        } else if c == '"' {
+            self.scan_double_quoted_string();
         } else {
-            while self.peek() != ' ' && self.peek() != '\t' && !self.is_at_end() {
-                self.advance();
-            }
-            let value = &self.source[self.start..self.current];
-            self.tokens
-                .push(Token::new(TokenType::String, value.to_string()));
+            self.scan_non_quoted_word();
         }
+    }
+
+    fn scan_double_quoted_string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            self.advance();
+        }
+        if self.is_at_end() {
+            eprintln!("unexpected EOF while looking for matching `\"'");
+            return;
+        }
+        let value = self.source[(self.start + 1)..self.current].to_string();
+        self.advance();
+        self.tokens.push(Token::new(TokenType::String, value));
+    }
+
+    fn scan_single_quoted_string(&mut self) {
+        while self.peek() != '\'' && !self.is_at_end() {
+            self.advance();
+        }
+        if self.is_at_end() {
+            eprintln!("unexpected EOF while looking for matching `''");
+            return;
+        }
+        let value = self.source[(self.start + 1)..self.current].to_string();
+        self.advance();
+        self.tokens.push(Token::new(TokenType::String, value));
+    }
+
+    fn scan_non_quoted_word(&mut self) {
+        while self.peek() != ' ' && self.peek() != '\t' && !self.is_at_end() {
+            self.advance();
+        }
+        let value = &self.source[self.start..self.current];
+        self.tokens
+            .push(Token::new(TokenType::String, value.to_string()));
     }
 
     fn peek(&self) -> char {
@@ -137,6 +160,44 @@ mod tests {
     #[test]
     fn test_multiple_single_quoted_strings() {
         let input = "'hello world' 'how are you?' 'word'";
+        let mut scanner = Scanner::new(input.to_string());
+        let tokens: &Vec<Token> = scanner.scan_tokens();
+
+        let mut expected = Vec::new();
+        expected.push(Token::new(TokenType::String, "hello world".to_string()));
+        expected.push(Token::new(TokenType::String, "how are you?".to_string()));
+        expected.push(Token::new(TokenType::String, "word".to_string()));
+        expected.push(Token::new(TokenType::Eof, "".to_string()));
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (expected_token, actual_token) in zip(expected, tokens) {
+            assert_eq!(actual_token.type_, expected_token.type_);
+            assert_eq!(actual_token.lexeme, expected_token.lexeme);
+        }
+    }
+
+    #[test]
+    fn test_1_double_quoted_string() {
+        let input = "\"hello world\"";
+        let mut scanner = Scanner::new(input.to_string());
+        let tokens: &Vec<Token> = scanner.scan_tokens();
+
+        let mut expected = Vec::new();
+        expected.push(Token::new(TokenType::String, "hello world".to_string()));
+        expected.push(Token::new(TokenType::Eof, "".to_string()));
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (expected_token, actual_token) in zip(expected, tokens) {
+            assert_eq!(actual_token.type_, expected_token.type_);
+            assert_eq!(actual_token.lexeme, expected_token.lexeme);
+        }
+    }
+
+    #[test]
+    fn test_multiple_double_quoted_strings() {
+        let input = "\"hello world\" \"how are you?\" \"word\"";
         let mut scanner = Scanner::new(input.to_string());
         let tokens: &Vec<Token> = scanner.scan_tokens();
 
