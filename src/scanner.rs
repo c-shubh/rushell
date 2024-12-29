@@ -120,15 +120,16 @@ impl Scanner {
         let mut value = String::new();
 
         while !self.is_at_end() && !self.is_metacharacter(self.peek()) {
-            // Each of the shell metacharacters has special meaning to the shell
-            // and must be quoted (escape character) if it is to represent itself.
-
             // current is at \
             if self.peek() == '\\' {
                 // consume \
                 self.advance();
+                if self.is_metacharacter(self.peek()) || self.peek() == '\\' {
+                    value.push(self.advance());
+                }
+            } else {
+                value.push(self.advance());
             }
-            value.push(self.advance());
         }
         self.tokens.push(Token::new(TokenType::String, value));
     }
