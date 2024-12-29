@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::token::{Token, TokenType};
 
 pub struct Scanner {
@@ -5,6 +7,17 @@ pub struct Scanner {
     start: usize,
     current: usize,
     tokens: Vec<Token>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScannerError {
+    pub message: String,
+}
+
+impl Display for ScannerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
 }
 
 impl Scanner {
@@ -17,52 +30,53 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Result<&Vec<Token>, ScannerError> {
         while !self.is_at_end() {
             self.start = self.current;
-            self.scan_token();
+
+            let c = self.advance();
+            if c == ' ' || c == '\t' {
+            } else if c == '\'' {
+                self.scan_single_quoted_string()?;
+            } else if c == '"' {
+                self.scan_double_quoted_string()?;
+            } else {
+                self.scan_non_quoted_word();
+            }
         }
 
         self.tokens.push(Token::new(TokenType::Eof, "".to_string()));
-        &self.tokens
+        Ok(&self.tokens)
     }
 
-    fn scan_token(&mut self) {
-        let c = self.advance();
-        if c == ' ' || c == '\t' {
-        } else if c == '\'' {
-            self.scan_single_quoted_string();
-        } else if c == '"' {
-            self.scan_double_quoted_string();
-        } else {
-            self.scan_non_quoted_word();
-        }
-    }
-
-    fn scan_double_quoted_string(&mut self) {
+    fn scan_double_quoted_string(&mut self) -> Result<(), ScannerError> {
         while self.peek() != '"' && !self.is_at_end() {
             self.advance();
         }
         if self.is_at_end() {
-            eprintln!("unexpected EOF while looking for matching `\"'");
-            return;
+            return Err(ScannerError {
+                message: "unexpected EOF while looking for matching `\"`".to_string(),
+            });
         }
         let value = self.source[(self.start + 1)..self.current].to_string();
         self.advance();
         self.tokens.push(Token::new(TokenType::String, value));
+        Ok(())
     }
 
-    fn scan_single_quoted_string(&mut self) {
+    fn scan_single_quoted_string(&mut self) -> Result<(), ScannerError> {
         while self.peek() != '\'' && !self.is_at_end() {
             self.advance();
         }
         if self.is_at_end() {
-            eprintln!("unexpected EOF while looking for matching `''");
-            return;
+            return Err(ScannerError {
+                message: "unexpected EOF while looking for matching `''".to_string(),
+            });
         }
         let value = self.source[(self.start + 1)..self.current].to_string();
         self.advance();
         self.tokens.push(Token::new(TokenType::String, value));
+        Ok(())
     }
 
     fn scan_non_quoted_word(&mut self) {
@@ -103,11 +117,12 @@ mod tests {
     fn test_single_word() {
         let input = "echo";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "echo".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
+        let expected = vec![
+            Token::new(TokenType::String, "echo".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
 
         assert_eq!(tokens.len(), expected.len());
 
@@ -121,16 +136,16 @@ mod tests {
     fn test_multiple_words() {
         let input = "echo hello world hey there";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "echo".to_string()));
-        expected.push(Token::new(TokenType::String, "hello".to_string()));
-        expected.push(Token::new(TokenType::String, "world".to_string()));
-        expected.push(Token::new(TokenType::String, "hey".to_string()));
-        expected.push(Token::new(TokenType::String, "there".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
-
+        let expected = [
+            Token::new(TokenType::String, "echo".to_string()),
+            Token::new(TokenType::String, "hello".to_string()),
+            Token::new(TokenType::String, "world".to_string()),
+            Token::new(TokenType::String, "hey".to_string()),
+            Token::new(TokenType::String, "there".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in zip(expected, tokens) {
@@ -143,12 +158,12 @@ mod tests {
     fn test_1_single_quoted_string() {
         let input = "'hello world'";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "hello world".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
-
+        let expected = [
+            Token::new(TokenType::String, "hello world".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in zip(expected, tokens) {
@@ -161,14 +176,14 @@ mod tests {
     fn test_multiple_single_quoted_strings() {
         let input = "'hello world' 'how are you?' 'word'";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "hello world".to_string()));
-        expected.push(Token::new(TokenType::String, "how are you?".to_string()));
-        expected.push(Token::new(TokenType::String, "word".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
-
+        let expected = [
+            Token::new(TokenType::String, "hello world".to_string()),
+            Token::new(TokenType::String, "how are you?".to_string()),
+            Token::new(TokenType::String, "word".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in zip(expected, tokens) {
@@ -181,12 +196,12 @@ mod tests {
     fn test_1_double_quoted_string() {
         let input = "\"hello world\"";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "hello world".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
-
+        let expected = [
+            Token::new(TokenType::String, "hello world".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in zip(expected, tokens) {
@@ -199,14 +214,14 @@ mod tests {
     fn test_multiple_double_quoted_strings() {
         let input = "\"hello world\" \"how are you?\" \"word\"";
         let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens();
+        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
 
-        let mut expected = Vec::new();
-        expected.push(Token::new(TokenType::String, "hello world".to_string()));
-        expected.push(Token::new(TokenType::String, "how are you?".to_string()));
-        expected.push(Token::new(TokenType::String, "word".to_string()));
-        expected.push(Token::new(TokenType::Eof, "".to_string()));
-
+        let expected = [
+            Token::new(TokenType::String, "hello world".to_string()),
+            Token::new(TokenType::String, "how are you?".to_string()),
+            Token::new(TokenType::String, "word".to_string()),
+            Token::new(TokenType::Eof, "".to_string()),
+        ];
         assert_eq!(tokens.len(), expected.len());
 
         for (expected_token, actual_token) in zip(expected, tokens) {

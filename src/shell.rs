@@ -42,16 +42,22 @@ impl Shell {
 
     fn run(&self, source: String) {
         let mut scanner = Scanner::new(source);
-        let args: Vec<String> = scanner
-            .scan_tokens()
-            .iter()
-            .filter(|token| token.type_ != TokenType::Eof)
-            .map(|token| token.lexeme.clone())
-            .collect();
-        if args.is_empty() {
-            return;
+        let scanned_tokens = scanner.scan_tokens();
+
+        match scanned_tokens {
+            Ok(scanned_tokens) => {
+                let args: Vec<String> = scanned_tokens
+                    .iter()
+                    .filter(|token| token.type_ != TokenType::Eof)
+                    .map(|token| token.lexeme.clone())
+                    .collect();
+                if args.is_empty() {
+                    return;
+                }
+                self.execute(&args);
+            }
+            Err(e) => eprintln!("{}", e),
         }
-        self.execute(&args);
     }
 
     fn execute(&self, args: &[String]) -> i32 {
