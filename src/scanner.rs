@@ -70,7 +70,7 @@ impl Scanner {
                         value.push(self.advance());
                     }
                     'n' => {
-                        value.push('\n');
+                        value.push_str("\\n");
                         self.advance(); // consume n
                     }
                     _ => {
@@ -310,7 +310,7 @@ mod tests {
             Token::new(TokenType::String, "`".to_string()),
             Token::new(TokenType::String, "\"".to_string()),
             Token::new(TokenType::String, "\\".to_string()),
-            Token::new(TokenType::String, "\n".to_string()),
+            Token::new(TokenType::String, "\\n".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
 
