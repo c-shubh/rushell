@@ -37,12 +37,14 @@ impl Scanner {
             let c = self.advance();
             if c == ' ' || c == '\t' {
             } else if c == '\'' {
-                self.scan_single_quoted_string()?;
+                let value = self.scan_single_quoted_string(self.start)?;
+                self.tokens.push(Token::new(TokenType::String, value.1));
+                self.current = value.0;
             } else if c == '"' {
                 self.scan_double_quoted_string()?;
             } else {
                 self.current -= 1;
-                self.scan_non_quoted_word();
+                self.scan_unquoted_word();
             }
         }
 
@@ -95,20 +97,26 @@ impl Scanner {
     }
 
     /// https://www.gnu.org/software/bash/manual/bash.html#Single-Quotes
-    fn scan_single_quoted_string(&mut self) -> Result<(), ScannerError> {
-        while !self.is_at_end() && self.peek() != '\'' {
-            self.advance();
+    fn scan_single_quoted_string(&self, start: usize) -> Result<(usize, String), ScannerError> {
+        let mut end_at: Option<usize> = None; // points to index of closing '
+        for (i, c) in self.source.chars().skip(start + 1).enumerate() {
+            // stop once we find closing '
+            if c == '\'' {
+                end_at = Some(start + i + 1);
+                break;
+            }
         }
-        if self.is_at_end() {
+        if end_at.is_none() {
             return Err(ScannerError {
                 message: "unexpected EOF while looking for matching `''".to_string(),
             });
         }
+        let end_at = end_at.unwrap();
+        println!("{}, {}", start, end_at);
+
         // exclude opening ' in substr
-        let value = self.source[(self.start + 1)..self.current].to_string();
-        self.advance(); // consume closing '
-        self.tokens.push(Token::new(TokenType::String, value));
-        Ok(())
+        let value = self.source[(start + 1)..end_at].to_string();
+        Ok((end_at + 1, value))
     }
 
     /// https://www.gnu.org/software/bash/manual/bash.html#index-metacharacter
@@ -116,7 +124,7 @@ impl Scanner {
         " \t\n|&;()<>".contains(c)
     }
 
-    fn scan_non_quoted_word(&mut self) {
+    fn scan_unquoted_word(&mut self) {
         let mut value = String::new();
 
         while !self.is_at_end() && !self.is_metacharacter(self.peek()) {
@@ -157,7 +165,7 @@ mod tests {
     use std::iter::zip;
 
     use super::Scanner;
-    use crate::token::{Token, TokenType};
+    use crate::token::{self, Token, TokenType};
 
     #[test]
     fn test_single_word() {
@@ -403,6 +411,48 @@ mod tests {
         for (expected_token, actual_token) in expected.iter().zip(tokens) {
             assert_eq!(actual_token.type_, expected_token.type_);
             assert_eq!(actual_token.lexeme, expected_token.lexeme);
+        }
+    }
+
+    #[test]
+    fn test_adjacent_strings() {
+        let inputs = [
+            "hey\"there how\"",       // unquoted, double quoted
+            "hey'there how'",         // unquoted, single quoted
+            "\"hey there\"how",       // double quoted, unquoted
+            "'hey there'how",         // single quoted, unquoted
+            "\"hey there\"'how are'", // double quoted, single quoted
+            "'hey there'\"how are\"", // single quoted, double quoted
+        ];
+
+        let outputs = [
+            "heythere how",
+            "heythere how",
+            "hey therehow",
+            "hey therehow",
+            "hey therehow are",
+            "hey therehow are",
+        ];
+
+        for (input, output) in zip(inputs, outputs) {
+            let mut scanner = Scanner::new(input.to_string());
+            let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+
+            let mut expected = Vec::new();
+            output
+                .split(" ")
+                .for_each(|o| expected.push(Token::new(TokenType::String, o.to_string())));
+            expected.push(Token::new(TokenType::Eof, "".to_string()));
+
+            println!("actual: {:#?}", tokens);
+            println!("expected: {:#?}", expected);
+
+            assert_eq!(tokens.len(), expected.len());
+
+            for (expected_token, actual_token) in expected.iter().zip(tokens) {
+                assert_eq!(actual_token.type_, expected_token.type_);
+                assert_eq!(actual_token.lexeme, expected_token.lexeme);
+            }
         }
     }
 }
