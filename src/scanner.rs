@@ -39,6 +39,7 @@ impl Scanner {
             let c = self.source.chars().nth(current).unwrap();
             current += 1;
             if c == ' ' || c == '\t' {
+                previous_arm = None;
             } else if c == '\'' {
                 let value = self.scan_single_quoted_string(start)?;
                 tokens.push(Token::new(TokenType::String, value.1));
@@ -106,6 +107,7 @@ impl Scanner {
 
                         // unknown escape sequence, print \ literally
                         value.push('\\');
+                        value.push(c);
                     }
                 }
             } else {
@@ -192,7 +194,7 @@ impl Scanner {
 
 #[cfg(test)]
 mod tests {
-    use std::iter::zip;
+    use std::{iter::zip, vec};
 
     use super::Scanner;
     use crate::token::{Token, TokenType};
@@ -334,6 +336,27 @@ mod tests {
             Token::new(TokenType::Eof, "".to_string()),
         ];
         test(input.to_string(), expected);
+
+        // input:
+        // cat "/tmp/quz/'f 15'" "/tmp/quz/'f  \74'" "/tmp/quz/'f \66\'"
+        // output tokens:
+        // echo
+        // cat
+        // /tmp/quz/'f 15'
+        // /tmp/quz/'f  \74'
+        // /tmp/quz/'f \66\'
+
+        let input = "cat \"/tmp/quz/\'f 15\'\" \"/tmp/quz/\'f  \\74\'\" \"/tmp/quz/\'f \\66\\\'\"";
+        test(
+            input.to_string(),
+            vec![
+                Token::new(TokenType::String, "cat".to_string()),
+                Token::new(TokenType::String, "/tmp/quz/\'f 15\'".to_string()),
+                Token::new(TokenType::String, "/tmp/quz/\'f  \\74\'".to_string()),
+                Token::new(TokenType::String, "/tmp/quz/\'f \\66\\\'".to_string()),
+                eof_token(),
+            ],
+        );
     }
 
     #[test]
