@@ -4,9 +4,6 @@ use crate::token::{Token, TokenType};
 
 pub struct Scanner {
     source: String,
-    start: usize,
-    current: usize,
-    tokens: Vec<Token>,
 }
 
 #[derive(Debug, Clone)]
@@ -22,36 +19,54 @@ impl Display for ScannerError {
 
 impl Scanner {
     pub fn new(source: String) -> Self {
-        Scanner {
-            source,
-            start: 0,
-            current: 0,
-            tokens: Vec::new(),
-        }
+        Scanner { source }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<&Vec<Token>, ScannerError> {
-        while !self.is_at_end() {
-            self.start = self.current;
+    pub fn scan_tokens(&self) -> Result<Vec<Token>, ScannerError> {
+        enum Arm {
+            SingleQuoted,
+            DoubleQuoted,
+        }
 
-            let c = self.advance();
+        let mut previous_arm: Option<Arm> = None;
+        let mut tokens: Vec<Token> = Vec::new();
+        let mut current = 0;
+        let mut start: usize;
+
+        while current < self.source.len() {
+            start = current;
+
+            let c = self.source.chars().nth(current).unwrap();
+            current += 1;
             if c == ' ' || c == '\t' {
             } else if c == '\'' {
-                let value = self.scan_single_quoted_string(self.start)?;
-                self.tokens.push(Token::new(TokenType::String, value.1));
-                self.current = value.0;
+                let value = self.scan_single_quoted_string(start)?;
+                tokens.push(Token::new(TokenType::String, value.1));
+                current = value.0;
+                previous_arm = Some(Arm::SingleQuoted);
             } else if c == '"' {
-                let value = self.scan_double_quoted_string(self.start)?;
-                self.tokens.push(Token::new(TokenType::String, value.1));
-                self.current = value.0;
+                let value = self.scan_double_quoted_string(start)?;
+                tokens.push(Token::new(TokenType::String, value.1));
+                current = value.0;
+                previous_arm = Some(Arm::DoubleQuoted);
             } else {
-                self.current -= 1;
-                self.scan_unquoted_word()?;
+                let value = self.scan_unquoted_word(start)?;
+                match previous_arm {
+                    Some(Arm::SingleQuoted) | Some(Arm::DoubleQuoted) => {
+                        if let Some(mut token) = tokens.pop() {
+                            token.lexeme.push_str(value.1.as_str());
+                            tokens.push(token);
+                        }
+                    }
+                    None => tokens.push(Token::new(TokenType::String, value.1)),
+                }
+                previous_arm = None;
+                current = value.0;
             }
         }
 
-        self.tokens.push(Token::new(TokenType::Eof, "".to_string()));
-        Ok(&self.tokens)
+        tokens.push(Token::new(TokenType::Eof, "".to_string()));
+        Ok(tokens)
     }
 
     /// https://www.gnu.org/software/bash/manual/bash.html#Double-Quotes
@@ -136,47 +151,44 @@ impl Scanner {
         " \t\n|&;()<>".contains(c)
     }
 
-    fn scan_unquoted_word(&mut self) -> Result<(), ScannerError> {
+    fn scan_unquoted_word(&self, start: usize) -> Result<(usize, String), ScannerError> {
         let mut value = String::new();
-        while !self.is_at_end() && !self.is_metacharacter(self.peek()) {
-            // current is at \
-            if self.peek() == '\\' {
-                // consume \
-                self.advance();
-                value.push(self.advance());
-            } else if self.peek() == '\'' {
-                let ret = self.scan_single_quoted_string(self.current)?;
+        let mut current = start;
+
+        while current < self.source.len()
+            && !self.is_metacharacter(self.source.chars().nth(current).unwrap())
+        {
+            let c = self.source.chars().nth(current).unwrap();
+            if c == '\\' {
+                // Handle escape sequence
+                current += 1; // Skip '\'
+                if current < self.source.len() {
+                    value.push(self.source.chars().nth(current).unwrap());
+                    current += 1;
+                } else {
+                    return Err(ScannerError {
+                        message: "unexpected EOF after '\\'".to_string(),
+                    });
+                }
+            } else if c == '\'' {
+                let ret = self.scan_single_quoted_string(current)?;
                 value.push_str(&ret.1);
-                self.current = ret.0;
-            } else if self.peek() == '\"' {
-                let ret = self.scan_double_quoted_string(self.current)?;
+                current = ret.0;
+            } else if c == '\"' {
+                let ret = self.scan_double_quoted_string(current)?;
                 value.push_str(&ret.1);
-                self.current = ret.0;
+                current = ret.0;
             } else {
-                value.push(self.advance());
+                value.push(c);
+                current += 1;
             }
         }
-        self.tokens.push(Token::new(TokenType::String, value));
-        Ok(())
-    }
 
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-        self.source.chars().nth(self.current).unwrap()
-    }
-
-    fn is_at_end(&self) -> bool {
-        self.current >= self.source.len()
-    }
-
-    fn advance(&mut self) -> char {
-        let to_ret = self.source.chars().nth(self.current).unwrap();
-        self.current += 1;
-        to_ret
+        Ok((current, value))
     }
 }
+
+// MARK: Tests
 
 #[cfg(test)]
 mod tests {
@@ -188,8 +200,8 @@ mod tests {
     #[test]
     fn test_single_word() {
         let input = "echo";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = vec![
             Token::new(TokenType::String, "echo".to_string()),
@@ -210,8 +222,8 @@ mod tests {
     #[test]
     fn test_multiple_words() {
         let input = "echo hello world hey there";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = [
             Token::new(TokenType::String, "echo".to_string()),
@@ -232,8 +244,8 @@ mod tests {
     #[test]
     fn test_1_single_quoted_string() {
         let input = "'hello world'";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = [
             Token::new(TokenType::String, "hello world".to_string()),
@@ -250,8 +262,8 @@ mod tests {
     #[test]
     fn test_multiple_single_quoted_strings() {
         let input = "'hello world' 'how are you?' 'word'";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = [
             Token::new(TokenType::String, "hello world".to_string()),
@@ -292,8 +304,8 @@ mod tests {
     #[test]
     fn test_single_quoted_string_escape_char_does_nothing() {
         let input = "'\\' 'hey\\nthere' '\\\\' '\\ '";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = [
             Token::new(TokenType::String, "\\".to_string()),
@@ -401,8 +413,8 @@ mod tests {
     #[test]
     fn test_backslash_metacharacter_in_unquoted_string() {
         let input = "hello\\ wor\\>ld";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        let scanner = Scanner::new(input.to_string());
+        let tokens = scanner.scan_tokens().unwrap();
 
         let expected = [
             Token::new(TokenType::String, "hello wor>ld".to_string()),
@@ -417,7 +429,7 @@ mod tests {
     }
 
     fn test(input: String, expected: Vec<Token>) {
-        let mut scanner = Scanner::new(input.to_string());
+        let scanner = Scanner::new(input.to_string());
         let tokens = scanner.scan_tokens().unwrap();
 
         println!("actual: {:#?}", tokens);

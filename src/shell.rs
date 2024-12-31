@@ -41,7 +41,7 @@ impl Shell {
     }
 
     fn run(&self, source: String) {
-        let mut scanner = Scanner::new(source);
+        let scanner = Scanner::new(source);
         let scanned_tokens = scanner.scan_tokens();
 
         match scanned_tokens {
