@@ -41,7 +41,9 @@ impl Scanner {
                 self.tokens.push(Token::new(TokenType::String, value.1));
                 self.current = value.0;
             } else if c == '"' {
-                self.scan_double_quoted_string()?;
+                let value = self.scan_double_quoted_string(self.start)?;
+                self.tokens.push(Token::new(TokenType::String, value.1));
+                self.current = value.0;
             } else {
                 self.current -= 1;
                 self.scan_unquoted_word()?;
@@ -53,27 +55,36 @@ impl Scanner {
     }
 
     /// https://www.gnu.org/software/bash/manual/bash.html#Double-Quotes
-    fn scan_double_quoted_string(&mut self) -> Result<(), ScannerError> {
+    fn scan_double_quoted_string(&self, start: usize) -> Result<(usize, String), ScannerError> {
+        let mut end_at: Option<usize> = None; // points to index of closing "
         let mut value = String::new();
-        while !self.is_at_end() && self.peek() != '"' {
+        // `start` is "
+        // start iterating from `start+1`
+        let mut iter = self.source.chars().skip(start + 1).enumerate();
+        while let Some((i, c)) = iter.next() {
+            // stop once we find closing "
+            if c == '"' {
+                end_at = Some(start + i + 1);
+                break;
+            }
+
             // The backslash retains its special meaning only when followed by
             // one of the following characters: ‘$’, ‘`’, ‘"’, ‘\’, or newline.
             // Within double quotes, backslashes that are followed by one of
             // these characters are removed.
 
             // current is at \
-            if self.peek() == '\\' {
+            if c == '\\' {
                 // consume \
-                self.advance();
+                let (_, c) = iter.next().unwrap_or((i + 1, '\0'));
                 // check current
-                match self.peek() {
+                match c {
                     '$' | '`' | '"' | '\\' => {
                         // only print matching character, and not backslash
-                        value.push(self.advance());
+                        value.push(c);
                     }
                     'n' => {
                         value.push_str("\\n");
-                        self.advance(); // consume n
                     }
                     _ => {
                         // Backslashes preceding characters without a special meaning are left unmodified.
@@ -83,17 +94,19 @@ impl Scanner {
                     }
                 }
             } else {
-                value.push(self.advance());
+                value.push(c);
             }
         }
-        if self.is_at_end() {
+        if end_at.is_none() {
             return Err(ScannerError {
-                message: "unexpected EOF while looking for matching `\"`".to_string(),
+                message: "unexpected EOF while looking for matching `\"'".to_string(),
             });
         }
-        self.advance(); // consume closing "
-        self.tokens.push(Token::new(TokenType::String, value));
-        Ok(())
+        let end_at = end_at.unwrap();
+
+        // exclude opening " in substr
+        // let value = self.source[(start + 1)..end_at].to_string();
+        Ok((end_at + 1, value))
     }
 
     /// https://www.gnu.org/software/bash/manual/bash.html#Single-Quotes
@@ -125,13 +138,13 @@ impl Scanner {
 
     fn scan_unquoted_word(&mut self) -> Result<(), ScannerError> {
         let mut value = String::new();
-
         while !self.is_at_end() && !self.is_metacharacter(self.peek()) {
             // current is at \
             if self.peek() == '\\' {
                 // consume \
                 self.advance();
-                if self.is_metacharacter(self.peek()) || self.peek() == '\\' {
+                if self.is_metacharacter(self.peek()) || self.peek() == '\\' || self.peek() == '\''
+                {
                     value.push(self.advance());
                 }
             } else if self.peek() == '\'' {
@@ -256,39 +269,23 @@ mod tests {
     #[test]
     fn test_1_double_quoted_string() {
         let input = "\"hello world\"";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
-
-        let expected = [
+        let expected = vec![
             Token::new(TokenType::String, "hello world".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in zip(expected, tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
     fn test_multiple_double_quoted_strings() {
         let input = "\"hello world\" \"how are you?\" \"word\"";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
-
-        let expected = [
+        let expected = vec![
             Token::new(TokenType::String, "hello world".to_string()),
             Token::new(TokenType::String, "how are you?".to_string()),
             Token::new(TokenType::String, "word".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in zip(expected, tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
@@ -315,10 +312,7 @@ mod tests {
     #[test]
     fn test_double_quoted_string_escape_char_works() {
         let input = "\"\\$\" \"\\`\" \"\\\"\" \"\\\\\" \"\\n\"";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
-
-        let expected = [
+        let expected = vec![
             Token::new(TokenType::String, "$".to_string()),
             Token::new(TokenType::String, "`".to_string()),
             Token::new(TokenType::String, "\"".to_string()),
@@ -326,61 +320,44 @@ mod tests {
             Token::new(TokenType::String, "\\n".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-
-        println!("actual: {:#?}", tokens);
-        println!("expected: {:#?}", expected);
-
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in zip(expected, tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
     fn test_escaped_double_quotes_in_double_quoted_string() {
         let input = "\"hello \\\"world\\\"\"";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
-
-        let expected = [
+        let expected = vec![
             Token::new(TokenType::String, "hello \"world\"".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in expected.iter().zip(tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
-    fn test_backslash_to_escape_itself() {
+    fn test_double_quoted_backslash_to_escape_itself() {
+        // input:
+        // "hello\\world"
         let input = "\"hello\\\\world\"";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
-
-        let expected = [
+        let expected = vec![
             Token::new(TokenType::String, "hello\\world".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in expected.iter().zip(tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
     fn test_backslash_in_unquoted_string() {
-        let input = "echo \\'\\\"example shell\\\"\\' hello\\\\nworld hey\\nthere";
-        let mut scanner = Scanner::new(input.to_string());
-        let tokens: &Vec<Token> = scanner.scan_tokens().unwrap();
+        // input:
+        // echo \'\"example shell\"\' hello\\nworld hey\nthere
+        // output tokens:
+        // echo
+        // '"example
+        // shell"'
+        // hello\nworld
+        // heynthere
 
-        let expected = [
+        let input = "echo \\'\\\"example shell\\\"\\' hello\\\\nworld hey\\nthere";
+        let expected = vec![
             Token::new(TokenType::String, "echo".to_string()),
             Token::new(TokenType::String, "'\"example".to_string()),
             Token::new(TokenType::String, "shell\"'".to_string()),
@@ -388,16 +365,7 @@ mod tests {
             Token::new(TokenType::String, "heynthere".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
         ];
-
-        println!("actual: {:#?}", tokens);
-        println!("expected: {:#?}", expected);
-
-        assert_eq!(tokens.len(), expected.len());
-
-        for (expected_token, actual_token) in expected.iter().zip(tokens) {
-            assert_eq!(actual_token.type_, expected_token.type_);
-            assert_eq!(actual_token.lexeme, expected_token.lexeme);
-        }
+        test(input.to_string(), expected);
     }
 
     #[test]
