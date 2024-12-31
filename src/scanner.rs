@@ -143,12 +143,13 @@ impl Scanner {
             if self.peek() == '\\' {
                 // consume \
                 self.advance();
-                if self.is_metacharacter(self.peek()) || self.peek() == '\\' || self.peek() == '\''
-                {
-                    value.push(self.advance());
-                }
+                value.push(self.advance());
             } else if self.peek() == '\'' {
                 let ret = self.scan_single_quoted_string(self.current)?;
+                value.push_str(&ret.1);
+                self.current = ret.0;
+            } else if self.peek() == '\"' {
+                let ret = self.scan_double_quoted_string(self.current)?;
                 value.push_str(&ret.1);
                 self.current = ret.0;
             } else {
@@ -345,8 +346,37 @@ mod tests {
         test(input.to_string(), expected);
     }
 
+    fn eof_token() -> Token {
+        Token::new(TokenType::Eof, "".to_string())
+    }
+
     #[test]
     fn test_backslash_in_unquoted_string() {
+        test(
+            "hello\\\\nworld".to_string(),
+            vec![
+                Token::new(TokenType::String, "hello\\nworld".to_string()),
+                eof_token(),
+            ],
+        );
+
+        test(
+            "hey\\nthere".to_string(),
+            vec![
+                Token::new(TokenType::String, "heynthere".to_string()),
+                eof_token(),
+            ],
+        );
+
+        test(
+            "\\\'\\\"example shell\\\"\\\'".to_string(),
+            vec![
+                Token::new(TokenType::String, "\'\"example".to_string()),
+                Token::new(TokenType::String, "shell\"\'".to_string()),
+                eof_token(),
+            ],
+        );
+
         // input:
         // echo \'\"example shell\"\' hello\\nworld hey\nthere
         // output tokens:
@@ -356,11 +386,11 @@ mod tests {
         // hello\nworld
         // heynthere
 
-        let input = "echo \\'\\\"example shell\\\"\\' hello\\\\nworld hey\\nthere";
+        let input = "echo \\\'\\\"example shell\\\"\\\' hello\\\\nworld hey\\nthere";
         let expected = vec![
             Token::new(TokenType::String, "echo".to_string()),
-            Token::new(TokenType::String, "'\"example".to_string()),
-            Token::new(TokenType::String, "shell\"'".to_string()),
+            Token::new(TokenType::String, "\'\"example".to_string()),
+            Token::new(TokenType::String, "shell\"\'".to_string()),
             Token::new(TokenType::String, "hello\\nworld".to_string()),
             Token::new(TokenType::String, "heynthere".to_string()),
             Token::new(TokenType::Eof, "".to_string()),
